@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --with networkx --
 """
-DAG + OODA helper: read nodes/edges (JSON), optional weights; output order, sources, longest path, recommended first.
+DAG + OODA helper: read nodes/edges (JSON), optional weights; output order, sources, sinks, layers, longest path, recommended first.
 Input: stdin or file. JSON: {"nodes": [...], "edges": [[a,b],...], "weights": {"id": {"impact": 4, "effort": 2}}}
 """
 import json
@@ -40,6 +40,11 @@ def main() -> None:
 
     order = list(nx.topological_sort(G))
     sources = [n for n in G.nodes() if G.in_degree(n) == 0]
+    sinks = [n for n in G.nodes() if G.out_degree(n) == 0]
+    try:
+        layers = list(nx.topological_generations(G))
+    except Exception:
+        layers = []
     try:
         longest = nx.dag_longest_path(G)
     except Exception:
@@ -63,6 +68,12 @@ def main() -> None:
     print("SOURCES")
     for n in sources:
         print(n)
+    print("SINKS")
+    for n in sinks:
+        print(n)
+    print("LAYERS")
+    for i, layer in enumerate(layers):
+        print(f"layer_{i}\t" + "\t".join(sorted(layer)))
     print("LONGEST_PATH")
     for n in longest:
         print(n)

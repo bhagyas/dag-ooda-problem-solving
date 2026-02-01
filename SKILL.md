@@ -29,6 +29,9 @@ Never skip Orient: a good DAG prevents wasted effort and wrong order.
 - **Edges**: Dependencies. Edge `A → B` means "A must be done before B."
 - **Acyclic**: No cycles. If you find a cycle, break it by merging nodes or redefining dependencies.
 - **Topological order**: Any linear order that respects edges; use it as execution order.
+- **Sources**: Nodes with no incoming edges (in-degree 0); candidate first actions.
+- **Sinks**: Nodes with no outgoing edges (out-degree 0); terminal outcomes or final deliverables.
+- **Layers** (optional): Topological generations—layer 0 = sources, then nodes whose predecessors are done; nodes in the same layer can run in parallel.
 - **Critical path** (optional): Longest path in the DAG; identifies bottlenecks and highest-impact sequence.
 
 ## Combined Workflow
@@ -56,6 +59,28 @@ For each pair (A, B): if A must complete before B, add edge A → B. Build the g
 
 **Act**  
 Execute the chosen node (fix, task, or experiment). After each step, re-Observe (new logs, new symptoms, new requirements) and update the DAG—add/remove nodes or edges—then re-Orient and Decide again.
+
+## NetworkX Powers
+
+When using this skill, the agent can rely on NetworkX to:
+
+| Power | API / approach | Use when |
+|-------|----------------|----------|
+| **Build DAG** | `nx.DiGraph()`, `add_nodes_from()`, `add_edges_from()` | Modeling tasks and dependencies. |
+| **Validate acyclic** | `nx.is_directed_acyclic_graph(G)` | Before any sort or path; break cycles if False. |
+| **Execution order** | `list(nx.topological_sort(G))` | Decide the order to execute nodes. |
+| **First actions** | `[n for n in G.nodes() if G.in_degree(n) == 0]` | Pick candidate “next step” (sources). |
+| **Sinks** | `[n for n in G.nodes() if G.out_degree(n) == 0]` | Identify terminal outcomes or final deliverables. |
+| **Layers** | `nx.topological_generations(G)` | Group nodes by wave; same-layer nodes can run in parallel. |
+| **Critical path** | `nx.dag_longest_path(G)` or with `weight="weight"` | Find longest chain; prioritize those nodes. |
+| **In-degree / out-degree** | `G.in_degree(n)`, `G.out_degree(n)` | Inspect prerequisites or dependents. |
+| **Predecessors / successors** | `G.predecessors(n)`, `G.successors(n)` | Immediate prerequisites or dependents (one hop). |
+| **Reachability** | `nx.has_path(G, u, v)` | Whether u must complete before v (u reaches v). |
+| **Ancestors / descendants** | `nx.ancestors(G, n)`, `nx.descendants(G, n)` | See full upstream/downstream for a node. |
+| **Subgraph** | `G.subgraph(nodes)` or `nx.subgraph_view()` | Restrict to a subset of nodes. |
+| **Weighted DAG** | Set edge or node `weight`; use in `dag_longest_path(G, weight="weight")` | Prioritize by cost or impact along paths. |
+
+Prefer **running the helper script** (`scripts/ooda_dag.py`) when the DAG has many nodes or you need reproducible order, sources, longest path, and recommended first action with impact/effort scoring.
 
 ## NetworkX Snippets
 
@@ -87,6 +112,33 @@ order = list(nx.topological_sort(G))
 
 ```python
 sources = [n for n in G.nodes() if G.in_degree(n) == 0]
+```
+
+**Sinks (nodes with no dependents—terminal outcomes):**
+
+```python
+sinks = [n for n in G.nodes() if G.out_degree(n) == 0]
+```
+
+**Layers (topological generations—for parallel execution):**
+
+```python
+# Nodes in the same layer have no dependency on each other; can run in parallel
+for layer_idx, layer in enumerate(nx.topological_generations(G)):
+    print(f"Layer {layer_idx}: {layer}")
+```
+
+**Immediate predecessors or successors (one hop):**
+
+```python
+preds = list(G.predecessors(n))   # nodes that must complete before n
+succs = list(G.successors(n))    # nodes that depend on n
+```
+
+**Reachability (does u block v?):**
+
+```python
+nx.has_path(G, u, v)  # True if u must complete before v
 ```
 
 **Critical path (longest path; unweighted = most steps):**
@@ -150,7 +202,7 @@ When the DAG is non-trivial or the user wants concrete output (order, sources, c
   `uv run --with networkx python scripts/ooda_dag.py`  
   then paste JSON and Ctrl-D; or pass a file:  
   `uv run --with networkx python scripts/ooda_dag.py /path/to/dag.json`
-- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `LONGEST_PATH`, then `SOURCE_SCORES` (impact, effort, score per source), then `RECOMMENDED_FIRST` (best source by score). Exit code 1 if the graph has a cycle.
+- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `LAYERS` (layer_0, layer_1, … with tab-separated nodes per layer), then `LONGEST_PATH`, then `SOURCE_SCORES` (impact, effort, score per source), then `RECOMMENDED_FIRST` (best source by score). Exit code 1 if the graph has a cycle.
 
 When to run code: after **Orient** (graph built) to validate acyclic and get order/sources/path; or in **Decide** to pick the next action from sources/longest path. Prefer running the script over generating one-off snippets when the graph has many nodes or you need to re-run with small changes.
 
