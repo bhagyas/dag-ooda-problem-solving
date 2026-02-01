@@ -36,6 +36,28 @@ Never skip Orient: a good DAG prevents wasted effort and wrong order.
 - **Layers** (optional): Topological generations—layer 0 = sources, then nodes whose predecessors are done; nodes in the same layer can run in parallel.
 - **Critical path** (optional): Longest path in the DAG; identifies bottlenecks and highest-impact sequence.
 
+## AND-OR Trees (optional)
+
+The DAG can represent **AND-OR** semantics so some nodes are satisfied when **any** predecessor is done (OR) instead of **all** (AND).
+
+- **AND node** (default): Node is **ready** when **all** predecessors are done. Same as standard DAG dependency.
+- **OR node**: Node is **ready** when **at least one** predecessor is done. Use for alternative ways to achieve the same goal (e.g. "fix by patching config OR by upgrading dependency").
+
+**When to use OR**: When multiple paths lead to the same outcome and completing one path is enough—e.g. "unblock deploy" can be done by "fix auth" OR "bypass auth in dev." Use AND (default) when the node truly requires every predecessor.
+
+**In JSON**: Add optional `node_types` keyed by node id: `"and"` or `"or"`. Omitted nodes default to `"and"`.
+
+**Helper script**:
+- Outputs **NODE_TYPES** (each node and its type).
+- **READY_INITIAL**: Nodes ready with no nodes done (same as sources when all nodes are AND).
+- **READY_NOW**: When optional `"done": ["id1", "id2"]` is in the JSON, lists nodes that are ready *now* under AND/OR rules (excluding already-done nodes). Re-run the script after each Act with updated `done` to get the next candidate set.
+
+**Example** (OR node `deploy` is ready when either `fix-auth` or `add-retry` is done):
+
+```json
+{"nodes": ["fix-auth", "add-retry", "deploy"], "edges": [["fix-auth", "deploy"], ["add-retry", "deploy"]], "node_types": {"deploy": "or"}}
+```
+
 ## Combined Workflow
 
 Copy this checklist and track progress:
@@ -198,13 +220,13 @@ Use these scales so prioritization is consistent and interpretable.
 
 **Helper script** `scripts/ooda_dag.py` (relative to this skill’s root):
 
-- **Input**: JSON with `nodes` and `edges`; optional `weights` keyed by node id (see Standard Weights).
-  - `{"nodes": ["fix-auth", "add-retry", "deploy"], "edges": [["fix-auth", "deploy"], ["add-retry", "deploy"]], "weights": {"fix-auth": {"impact": 5, "effort": 2}, "add-retry": {"impact": 3, "effort": 1}}}`
+- **Input**: JSON with `nodes` and `edges`; optional `weights` keyed by node id (see Standard Weights); optional `node_types` keyed by node id (`"and"` or `"or"`, see AND-OR Trees); optional `done` (list of node ids already completed, for AND/OR ready set).
+  - Example: `{"nodes": ["fix-auth", "add-retry", "deploy"], "edges": [["fix-auth", "deploy"], ["add-retry", "deploy"]], "weights": {"fix-auth": {"impact": 5, "effort": 2}}, "node_types": {"deploy": "or"}}`
 - **Run**: From the skill root (the `dag-ooda-problem-solving` folder containing this SKILL.md—e.g. `~/.cursor/skills/dag-ooda-problem-solving` or `.cursor/skills/dag-ooda-problem-solving`):
   `uv run --with networkx python scripts/ooda_dag.py`  
   then paste JSON and Ctrl-D; or pass a file:  
   `uv run --with networkx python scripts/ooda_dag.py /path/to/dag.json`
-- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `LAYERS` (layer_0, layer_1, … with tab-separated nodes per layer), then `LONGEST_PATH`, then `SOURCE_SCORES` (impact, effort, score per source), then `RECOMMENDED_FIRST` (best source by score). Exit code 1 if the graph has a cycle.
+- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `NODE_TYPES` (node and type per line), then `READY_INITIAL` (nodes ready with no nodes done), then `READY_NOW` (only when `done` is provided; nodes ready now minus done), then `LAYERS`, then `LONGEST_PATH`, then `SOURCE_SCORES`, then `RECOMMENDED_FIRST`. Exit code 1 if the graph has a cycle.
 
 When to run code: after **Orient** (graph built) to validate acyclic and get order/sources/path; or in **Decide** to pick the next action from sources/longest path. **Always try to run the helper script** (`scripts/ooda_dag.py`) rather than one-off snippets; fall back to inline `uv run` only if the script cannot be run.
 

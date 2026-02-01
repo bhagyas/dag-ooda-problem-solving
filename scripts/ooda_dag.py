@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --with networkx --
 """
-DAG + OODA helper: read nodes/edges (JSON), optional weights; output order, sources, sinks, layers, longest path, recommended first.
-Input: stdin or file. JSON: {"nodes": [...], "edges": [[a,b],...], "weights": {"id": {"impact": 4, "effort": 2}}}
+DAG + OODA helper: read nodes/edges (JSON), optional weights and node_types (and/or); output order, sources, sinks, layers, longest path, recommended first.
+Input: stdin or file. JSON: {"nodes": [...], "edges": [[a,b],...], "weights": {...}, "node_types": {"id": "and"|"or"}}
 """
 import json
 import sys
@@ -11,12 +11,31 @@ import networkx as nx
 
 DEFAULT_IMPACT = 3
 DEFAULT_EFFORT = 3
+DEFAULT_NODE_TYPE = "and"
 
 
 def score(impact: int | float, effort: int | float) -> float:
     """Priority score: impact / effort. Effort 0 treated as 1."""
     e = effort if effort >= 1 else 1
     return impact / e
+
+
+def ready_nodes(G: nx.DiGraph, done: set[str], node_types: dict[str, str]) -> set[str]:
+    """Nodes that are ready to execute: all predecessors done (AND) or any predecessor done (OR)."""
+    result = set()
+    for n in G.nodes():
+        preds = set(G.predecessors(n))
+        if not preds:
+            result.add(n)
+            continue
+        node_type = node_types.get(n, DEFAULT_NODE_TYPE)
+        if node_type == "and":
+            if preds <= done:
+                result.add(n)
+        else:  # or
+            if preds & done:
+                result.add(n)
+    return result
 
 
 def main() -> None:
@@ -29,6 +48,12 @@ def main() -> None:
     nodes = data.get("nodes", [])
     edges = [tuple(e) for e in data.get("edges", [])]
     weights_map = data.get("weights", {})
+    raw_types = data.get("node_types", {})
+    node_types = {n: (raw_types.get(n, DEFAULT_NODE_TYPE).lower() or DEFAULT_NODE_TYPE) for n in nodes}
+    for n in node_types:
+        if node_types[n] not in ("and", "or"):
+            node_types[n] = DEFAULT_NODE_TYPE
+    done_set = set(data.get("done", []))
 
     G = nx.DiGraph()
     G.add_nodes_from(nodes)
@@ -71,6 +96,18 @@ def main() -> None:
     print("SINKS")
     for n in sinks:
         print(n)
+    print("NODE_TYPES")
+    for n in order:
+        print(f"{n}\t{node_types.get(n, DEFAULT_NODE_TYPE)}")
+    initial_ready = ready_nodes(G, set(), node_types)
+    print("READY_INITIAL")
+    for n in sorted(initial_ready):
+        print(n)
+    if done_set:
+        ready_now = ready_nodes(G, done_set, node_types) - done_set
+        print("READY_NOW")
+        for n in sorted(ready_now):
+            print(n)
     print("LAYERS")
     for i, layer in enumerate(layers):
         print(f"layer_{i}\t" + "\t".join(sorted(layer)))
