@@ -38,6 +38,29 @@ def ready_nodes(G: nx.DiGraph, done: set[str], node_types: dict[str, str]) -> se
     return result
 
 
+def satisfied_nodes(G: nx.DiGraph, done: set[str], node_types: dict[str, str]) -> set[str]:
+    """Nodes that are satisfied (done or reachable under AND/OR): fixpoint of done + (AND: all preds satisfied, OR: any pred satisfied)."""
+    sat = set(done)
+    order = list(nx.topological_sort(G))
+    changed = True
+    while changed:
+        changed = False
+        for n in order:
+            if n in sat:
+                continue
+            preds = set(G.predecessors(n))
+            if not preds:
+                continue
+            node_type = node_types.get(n, DEFAULT_NODE_TYPE)
+            if node_type == "and" and preds <= sat:
+                sat.add(n)
+                changed = True
+            elif node_type == "or" and (preds & sat):
+                sat.add(n)
+                changed = True
+    return sat
+
+
 def main() -> None:
     if len(sys.argv) > 1:
         path = Path(sys.argv[1])
@@ -108,6 +131,22 @@ def main() -> None:
         print("READY_NOW")
         for n in sorted(ready_now):
             print(n)
+        # Recommend next: score READY_NOW nodes (same impact/effort), pick best
+        ready_scores = []
+        for n in ready_now:
+            imp, eff = get_impact_effort(n)
+            ready_scores.append((n, imp, eff, score(imp, eff)))
+        recommended_next = max(ready_scores, key=lambda x: x[3])[0] if ready_scores else ""
+        print("RECOMMENDED_NEXT")
+        print(recommended_next)
+        # Goal reached when all sinks are satisfied (done or reachable under AND/OR)
+        satisfied = satisfied_nodes(G, done_set, node_types)
+        if sinks and set(sinks) <= satisfied:
+            print("GOAL_REACHED")
+            print("yes")
+        else:
+            print("GOAL_REACHED")
+            print("no")
     print("LAYERS")
     for i, layer in enumerate(layers):
         print(f"layer_{i}\t" + "\t".join(sorted(layer)))

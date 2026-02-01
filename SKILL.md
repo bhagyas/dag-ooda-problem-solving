@@ -47,10 +47,13 @@ The DAG can represent **AND-OR** semantics so some nodes are satisfied when **an
 
 **In JSON**: Add optional `node_types` keyed by node id: `"and"` or `"or"`. Omitted nodes default to `"and"`.
 
-**Helper script**:
+**Helper script** (when using AND/OR):
 - Outputs **NODE_TYPES** (each node and its type).
 - **READY_INITIAL**: Nodes ready with no nodes done (same as sources when all nodes are AND).
-- **READY_NOW**: When optional `"done": ["id1", "id2"]` is in the JSON, lists nodes that are ready *now* under AND/OR rules (excluding already-done nodes). Re-run the script after each Act with updated `done` to get the next candidate set.
+- When optional `"done": ["id1", "id2"]` is in the JSON:
+  - **READY_NOW**: Nodes that are ready *now* under AND/OR rules (excluding already-done nodes). Re-run after each Act with updated `done` to get the next candidate set.
+  - **RECOMMENDED_NEXT**: Best node from READY_NOW by impact/effort score (same as RECOMMENDED_FIRST logic applied to ready set).
+  - **GOAL_REACHED**: `yes` if all sinks are *satisfied* (in done or reachable under AND/OR from done); `no` otherwise. With OR sinks, the goal can be reached without executing every node.
 
 **Example** (OR node `deploy` is ready when either `fix-auth` or `add-retry` is done):
 
@@ -226,7 +229,7 @@ Use these scales so prioritization is consistent and interpretable.
   `uv run --with networkx python scripts/ooda_dag.py`  
   then paste JSON and Ctrl-D; or pass a file:  
   `uv run --with networkx python scripts/ooda_dag.py /path/to/dag.json`
-- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `NODE_TYPES` (node and type per line), then `READY_INITIAL` (nodes ready with no nodes done), then `READY_NOW` (only when `done` is provided; nodes ready now minus done), then `LAYERS`, then `LONGEST_PATH`, then `SOURCE_SCORES`, then `RECOMMENDED_FIRST`. Exit code 1 if the graph has a cycle.
+- **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `NODE_TYPES`, then `READY_INITIAL`, then when `done` is provided: `READY_NOW`, `RECOMMENDED_NEXT`, `GOAL_REACHED` (yes/no), then `LAYERS`, then `LONGEST_PATH`, then `SOURCE_SCORES`, then `RECOMMENDED_FIRST`. Exit code 1 if the graph has a cycle.
 
 When to run code: after **Orient** (graph built) to validate acyclic and get order/sources/path; or in **Decide** to pick the next action from sources/longest path. **Always try to run the helper script** (`scripts/ooda_dag.py`) rather than one-off snippets; fall back to inline `uv run` only if the script cannot be run.
 
