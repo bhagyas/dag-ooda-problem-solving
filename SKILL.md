@@ -14,6 +14,8 @@ Combines **OODA** (Observe, Orient, Decide, Act) with **DAGs** (Directed Acyclic
 3. **Decide**: Run a topological sort for a valid order; optionally weight nodes to pick the best first action or critical path.
 4. **Act**: Execute in chosen order; after each step, re-Observe and update the DAG if the situation changed.
 
+**Always try to run** the NetworkX helper script (`scripts/ooda_dag.py`) with the DAG’s nodes and edges so order, sources, longest path, and recommended first action are computed and reproducible.
+
 ## OODA Loop (Boyd)
 
 - **Observe**: Gather data—symptoms, logs, constraints, requirements.
@@ -80,7 +82,7 @@ When using this skill, the agent can rely on NetworkX to:
 | **Subgraph** | `G.subgraph(nodes)` or `nx.subgraph_view()` | Restrict to a subset of nodes. |
 | **Weighted DAG** | Set edge or node `weight`; use in `dag_longest_path(G, weight="weight")` | Prioritize by cost or impact along paths. |
 
-Prefer **running the helper script** (`scripts/ooda_dag.py`) when the DAG has many nodes or you need reproducible order, sources, longest path, and recommended first action with impact/effort scoring.
+**Always try to run the helper script** (`scripts/ooda_dag.py`) so the DAG yields reproducible order, sources, longest path, and recommended first action with impact/effort scoring—even for small graphs.
 
 ## NetworkX Snippets
 
@@ -187,7 +189,7 @@ Use these scales so prioritization is consistent and interpretable.
 
 ## Running Code
 
-When the DAG is non-trivial or the user wants concrete output (order, sources, critical path), **run Python via the terminal** so results are real and reproducible.
+**Always try to run Python via the terminal** (prefer the helper script) so DAG results—order, sources, critical path—are real and reproducible.
 
 **Use `uv`** so `networkx` is available without a pre-existing project or venv:
 
@@ -204,7 +206,7 @@ When the DAG is non-trivial or the user wants concrete output (order, sources, c
   `uv run --with networkx python scripts/ooda_dag.py /path/to/dag.json`
 - **Output**: `TOPOLOGICAL_ORDER`, then `SOURCES`, then `SINKS`, then `LAYERS` (layer_0, layer_1, … with tab-separated nodes per layer), then `LONGEST_PATH`, then `SOURCE_SCORES` (impact, effort, score per source), then `RECOMMENDED_FIRST` (best source by score). Exit code 1 if the graph has a cycle.
 
-When to run code: after **Orient** (graph built) to validate acyclic and get order/sources/path; or in **Decide** to pick the next action from sources/longest path. Prefer running the script over generating one-off snippets when the graph has many nodes or you need to re-run with small changes.
+When to run code: after **Orient** (graph built) to validate acyclic and get order/sources/path; or in **Decide** to pick the next action from sources/longest path. **Always try to run the helper script** (`scripts/ooda_dag.py`) rather than one-off snippets; fall back to inline `uv run` only if the script cannot be run.
 
 ## Output Format
 
